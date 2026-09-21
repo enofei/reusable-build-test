@@ -1,0 +1,64 @@
+name: Reusable Build & Test
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        description: 'Node.js version to use'
+        required: false
+        default: '18'
+        type: string
+      test-command:
+        description: 'Test command to run'
+        required: false
+        default: 'npm test'
+        type: string
+      working-directory:
+        description: 'Working directory for commands'
+        required: false
+        default: '.'
+        type: string
+      security-checks:
+        description: 'Run security audit'
+        required: false
+        default: false
+        type: boolean
+    outputs:
+      build-result:
+        description: 'Build job result'
+        value: ${{ jobs.build-and-test.result }}
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332  # v4.1.7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8  # v4.0.2
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: 'npm'
+          cache-dependency-path: '${{ inputs.working-directory }}/package-lock.json'
+
+      - name: Install dependencies
+        working-directory: ${{ inputs.working-directory }}
+        run: npm ci
+
+      - name: Build
+        working-directory: ${{ inputs.working-directory }}
+        run: npm run build
+
+      - name: Run tests
+        working-directory: ${{ inputs.working-directory }}
+        run: ${{ inputs.test-command }}
+
+      - name: Security audit
+        if: ${{ inputs.security-checks }}
+        working-directory: ${{ inputs.working-directory }}
+        run: npm audit --audit-level=high
