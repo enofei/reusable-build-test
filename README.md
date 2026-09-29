@@ -23,6 +23,20 @@ permissions and no access to caller secrets:
 5. Run `test-command`
 6. If `security-checks` is true, `npm audit --audit-level=high`
 
+```mermaid
+flowchart TD
+    A["Caller PR opened or updated"] --> B["ci.yml calls build-test.yml, pinned by SHA"]
+    B --> C["Checkout calling repository"]
+    C --> D["Setup Node.js + npm cache"]
+    D --> E["npm ci"]
+    E --> F["npm run build"]
+    F --> G["test-command (default: npm test)"]
+    G --> H{"security-checks enabled?"}
+    H -->|yes| I["npm audit --audit-level=high"]
+    H -->|no| J["Result published as build-result output"]
+    I --> J
+```
+
 ## Usage
 
 ```yaml
