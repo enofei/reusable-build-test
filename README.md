@@ -10,7 +10,7 @@ Reference the workflow from a caller repository's job:
 jobs:
   build-and-test:
     name: Build & Test
-    uses: enofei/reusable-build-test/.github/workflows/build-test.yml@<commit-sha>  # v1.1.0
+    uses: enofei/reusable-build-test/.github/workflows/build-test.yml@<commit-sha>  # v1.2.0
     with:
       node-version: '20'
       test-command: 'npm run test:ci'
@@ -23,7 +23,7 @@ jobs:
 
 | Input | Type | Default | Description |
 |---|---|---|---|
-| `node-version` | string | `'18'` | Node.js version passed to `actions/setup-node` |
+| `node-version` | string | `'24'` | Node.js version passed to `actions/setup-node` (default = latest LTS line) |
 | `test-command` | string | `'npm test'` | Test command to run after the build |
 | `working-directory` | string | `'.'` | Directory containing the Node project |
 | `security-checks` | boolean | `false` | Also run `npm audit --audit-level=high` |
@@ -49,8 +49,8 @@ The workflow runs with `contents: read` permissions and never receives caller se
 Actions and the workflow itself are SHA-pinned for supply-chain security. To resolve a release tag to its commit SHA:
 
 ```bash
-./scripts/resolve-action-sha.sh enofei/reusable-build-test v1.1.0
-# prints: <commit-sha>  # v1.1.0
+./scripts/resolve-action-sha.sh enofei/reusable-build-test v1.2.0
+# prints: <commit-sha>  # v1.2.0
 ```
 
 ## Releasing
