@@ -10,7 +10,7 @@ Reference the workflow from a caller repository's job:
 jobs:
   build-and-test:
     name: Build & Test
-    uses: enofei/reusable-build-test/.github/workflows/build-test.yml@<commit-sha>  # v1.1.0
+    uses: enofei/reusable-build-test/.github/workflows/build-test.yml@<commit-sha>  # v1.0.0
     with:
       node-version: '24'
       test-command: 'npm run test:ci'
@@ -49,8 +49,8 @@ The workflow runs with `contents: read` permissions and never receives caller se
 Actions and the workflow itself are SHA-pinned for supply-chain security. To resolve a release tag to its commit SHA:
 
 ```bash
-./scripts/resolve-action-sha.sh enofei/reusable-build-test v1.1.0
-# prints: <commit-sha>  # v1.1.0
+./scripts/resolve-action-sha.sh enofei/reusable-build-test v1.0.0
+# prints: <commit-sha>  # v1.0.0
 ```
 
 ## Releasing
