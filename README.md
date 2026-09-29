@@ -1,10 +1,8 @@
 # Reusable Build & Test
 
-A GitHub Actions [reusable workflow](https://docs.github.com/en/actions/using-workflows/reusing-workflows) that provides a standard **Node.js build, test, and (optionally) security-audit pipeline** for repositories in this organization.
+Reusable GitHub Actions workflow providing a Node.js build, test, and optional security-audit pipeline.
 
 ## Usage
-
-Reference the workflow from a caller repository's job:
 
 ```yaml
 jobs:
@@ -17,44 +15,25 @@ jobs:
       security-checks: true
 ```
 
-> **Security policy:** always pin `@<commit-sha>` (a full commit SHA) with a `# vX.Y.Z` version comment — never a branch or a mutable tag. See [Pinning](#pinning) below.
+Pin to a full commit SHA with a `# vX.Y.Z` version comment — never a branch or tag.
 
-## Inputs
+| Input | Default | Description |
+|---|---|---|
+| `node-version` | `'24'` | Node.js version |
+| `test-command` | `'npm test'` | Test command run after the build |
+| `working-directory` | `'.'` | Directory containing the Node project |
+| `security-checks` | `false` | Run `npm audit --audit-level=high` |
 
-| Input | Type | Default | Description |
-|---|---|---|---|
-| `node-version` | string | `'24'` | Node.js version passed to `actions/setup-node` (default = latest LTS line) |
-| `test-command` | string | `'npm test'` | Test command to run after the build |
-| `working-directory` | string | `'.'` | Directory containing the Node project |
-| `security-checks` | boolean | `false` | Also run `npm audit --audit-level=high` |
+Output `build-result`: result of the `build-and-test` job.
 
-## Outputs
+Callers must provide `package.json`, `package-lock.json`, a `build` script, and the script named in `test-command`. The workflow runs with `contents: read` and receives no caller secrets.
 
-| Output | Description |
-|---|---|
-| `build-result` | Result of the `build-and-test` job (`success`, `failure`, …) |
-
-## Contract for caller repositories
-
-The called workflow assumes the caller repo provides, in `working-directory`:
-
-- a `package.json` **and** `package-lock.json` (the lockfile is required — npm caching fails without it),
-- a `build` script (`npm run build`),
-- the script referenced by `test-command` (e.g. `npm run test:ci`).
-
-The workflow runs with `contents: read` permissions and never receives caller secrets.
-
-## Pinning
-
-Actions and the workflow itself are SHA-pinned for supply-chain security. To resolve a release tag to its commit SHA:
+Resolve a release tag to its commit SHA:
 
 ```bash
 ./scripts/resolve-action-sha.sh enofei/reusable-build-test v1.0.0
-# prints: <commit-sha>  # v1.0.0
 ```
 
 ## Releasing
 
-1. Merge changes to `main` (Dependabot keeps action SHAs up to date via grouped PRs).
-2. Create an annotated release tag on `main`: `git tag -a vX.Y.Z -m "..." && git push origin vX.Y.Z`.
-3. Update caller repositories to the new tag's **commit** SHA (Dependabot also proposes these updates).
+Merge to `main`, tag it (`git tag -a vX.Y.Z -m "..." && git push origin vX.Y.Z`), then update caller pins to the tag's commit SHA.
