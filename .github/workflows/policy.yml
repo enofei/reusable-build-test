@@ -1,0 +1,129 @@
+name: Reusable Policy Gate
+
+on:
+  workflow_call:
+    inputs:
+      mode:
+        description: 'Gate mode: warn | enforce-critical | enforce-full (main is clamped to enforce-critical)'
+        required: false
+        default: 'enforce-critical'
+        type: string
+      policy-path:
+        description: 'Directory containing Rego policies'
+        required: false
+        default: 'policy/'
+        type: string
+      sarif-artifact:
+        description: 'Name of the SARIF artifact uploaded by the SAST workflow'
+        required: false
+        default: 'semgrep-sarif'
+        type: string
+      conftest-version:
+        description: 'conftest release version (must match conftest-sha256)'
+        required: false
+        default: '0.71.0'
+        type: string
+      conftest-sha256:
+        description: 'Trusted SHA-256 of conftest Linux x86_64 tarball'
+        required: false
+        default: '765dfefdf0730693d7541ea0147e10d530a54ed257bbfec055ff34c837ffdf72'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: Gate
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Resolve effective gate mode (clamp main to enforce-critical)
+        run: |
+          set -euo pipefail
+          MODE="${{ inputs.mode }}"
+          REF="${{ github.base_ref || github.ref_name }}"
+          if [ "$REF" = "main" ]; then
+            echo "Branch main: clamping mode '${MODE}' -> enforce-critical"
+            MODE="enforce-critical"
+          fi
+          case "$MODE" in
+            warn|enforce-critical|enforce-full) ;;
+            *) echo "::error::invalid gate mode: ${MODE}"; exit 1 ;;
+          esac
+          echo "GATE_MODE=$MODE" >> "$GITHUB_ENV"
+          echo "Effective gate mode: $MODE (ref: $REF, input: '${{ inputs.mode }}')"
+
+      - name: Download SARIF artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: ${{ inputs.sarif-artifact }}
+          path: .
+
+      - name: Validate SARIF (fail-closed)
+        run: |
+          set -euo pipefail
+          test -s semgrep.sarif
+          python3 - <<'PY'
+          import json, sys
+          try:
+              with open("semgrep.sarif") as f:
+                  doc = json.load(f)
+          except Exception as exc:
+              sys.exit(f"invalid SARIF JSON: {exc}")
+          runs = doc.get("runs")
+          if not isinstance(runs, list) or not runs:
+              sys.exit("SARIF missing runs[]")
+          run0 = runs[0]
+          driver = (run0.get("tool") or {}).get("driver") or {}
+          name = str(driver.get("name", ""))
+          if "semgrep" not in name.lower():
+              sys.exit(f"unexpected SARIF tool: {name!r}")
+          if "results" not in run0:
+              sys.exit("SARIF missing results key")
+          print(f"SARIF OK: tool={name}, results={len(run0['results'])}")
+          PY
+
+      - name: Install conftest (trusted SHA-256)
+        run: |
+          set -euo pipefail
+          VER="${{ inputs.conftest-version }}"
+          SHA="${{ inputs.conftest-sha256 }}"
+          cd "$RUNNER_TEMP"
+          curl -fsSL -o conftest.tar.gz \
+            "https://github.com/open-policy-agent/conftest/releases/download/v${VER}/conftest_${VER}_Linux_x86_64.tar.gz"
+          echo "${SHA}  conftest.tar.gz" | sha256sum -c --strict
+          tar -xzf conftest.tar.gz conftest
+          ./conftest --version
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: conftest verify (policy unit tests)
+        run: |
+          set -euo pipefail
+          conftest verify --policy "${{ inputs.policy-path }}"
+
+      - name: Build gate input
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          with open("semgrep.sarif") as f:
+              sarif = json.load(f)
+          combined = {"mode": os.environ["GATE_MODE"], "sarif": sarif}
+          out = os.path.join(os.environ["RUNNER_TEMP"], "gate_input.json")
+          with open(out, "w") as f:
+              json.dump(combined, f)
+          print(f"gate input built: mode={combined['mode']}")
+          PY
+
+      - name: Evaluate policy
+        run: |
+          set -euo pipefail
+          conftest test --parser json --output github \
+            --policy "${{ inputs.policy-path }}" \
+            "$RUNNER_TEMP/gate_input.json"
