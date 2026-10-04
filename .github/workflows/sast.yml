@@ -40,7 +40,8 @@ jobs:
           docker run --rm \
             -v "$GITHUB_WORKSPACE:/repo" -w /repo \
             "$IMAGE" \
-            scan --config "${{ inputs.semgrep-config }}" \
+            semgrep scan --config "${{ inputs.semgrep-config }}" \
+            --no-rewrite-rule-ids \
             --sarif --output /repo/semgrep.sarif ${{ inputs.paths }}
           test -s semgrep.sarif
 
