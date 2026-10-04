@@ -1,8 +1,8 @@
 # Reusable Build & Test
 
 A set of reusable GitHub Actions workflows that gives any repository in this org the same
-Node.js build, test, and security pipeline — install/build/test/audit, a static analysis
-scan, and a fail-closed policy gate — without redefining it in every repo.
+Node.js build, test, and security pipeline (install/build/test/audit, a static analysis
+scan, and a fail-closed policy gate) without redefining it in every repo.
 
 ## Why this repository exists
 
@@ -23,7 +23,7 @@ release tag's commit SHA.
 
 The security pair (`sast.yml` + `policy.yml`) is designed to be called together: the scan
 produces a SARIF artifact, the gate consumes it and decides merge eligibility. What the
-gate *decides* (modes, exemptions, deny rules) is Rego policy owned by the caller; the
+gate decides (modes, exemptions, deny rules) is Rego policy owned by the caller; the
 workflow provides the trusted mechanics around it.
 
 ## What build-test.yml does
@@ -71,38 +71,40 @@ flowchart TD
 **Scan (`sast.yml`)**
 
 - Semgrep runs from a digest-pinned container (`semgrep/semgrep:1.179.0@sha256:…`);
-  nothing is installed at runtime and no rule source is fetched from the network —
+  nothing is installed at runtime and no rule source is fetched from the network;
   the caller passes a vendored rule bundle (`semgrep-config`, default
   `policy/semgrep-rules`).
 - `--no-rewrite-rule-ids` keeps registry rule IDs intact so code-scanning alerts
   deduplicate across runs.
-- The SARIF file is uploaded to code scanning **and** archived as an artifact
+- The SARIF file is uploaded to code scanning and archived as an artifact
   (`semgrep-sarif`, 1-day retention, `if-no-files-found: error`) for the gate.
 
-**Gate (`policy.yml`)** — every step fails closed (anomaly ⇒ red, never green):
+**Gate (`policy.yml`)**
 
-1. **Mode clamp** — when the ref is `main` (base or head), the effective mode is forced
+Every step fails closed (anomaly ⇒ red, never green):
+
+1. **Mode clamp**: when the ref is `main` (base or head), the effective mode is forced
    to `enforce-critical` regardless of the caller's `mode` input; callers cannot relax
    the gate for merges. An unknown mode is a hard error.
-2. **SARIF validation** — non-empty file, valid JSON, `runs[]`, Semgrep tool name,
+2. **SARIF validation**: non-empty file, valid JSON, `runs[]`, Semgrep tool name,
    `results`, and `tool.driver.rules` (needed to resolve severity).
-3. **Trusted toolchain** — conftest is installed to `$RUNNER_TEMP` and checked against
+3. **Trusted toolchain**: conftest is installed to `$RUNNER_TEMP` and checked against
    the embedded `conftest-sha256` before execution.
-4. **Policy unit tests first** — `conftest verify` must pass before the gate evaluates.
-5. **Evaluation** — `conftest test --parser json --output github` against
+4. **Policy unit tests first**: `conftest verify` must pass before the gate evaluates.
+5. **Evaluation**: `conftest test --parser json --output github` against
    `{mode, sarif}` input; findings annotate the run (warning or error by mode).
 
 ### Gate modes
 
 | Mode | Behavior |
 |---|---|
-| `warn` | advisory only — findings annotate the run, never block |
+| `warn` | advisory only: findings annotate the run, never block |
 | `enforce-critical` | blocks on findings at error level |
 | `enforce-full` | blocks on every finding, any level |
 
 The gate job must be wired with `if: ${{ always() }}` and `needs: [sast]` (as in the
-usage example): if the scan fails or its artifact is missing, the gate still runs —
-and fails — instead of silently passing.
+usage example): if the scan fails or its artifact is missing, the gate still runs
+and fails rather than silently passing.
 
 ## Usage
 
@@ -141,7 +143,7 @@ jobs:
 Always pin a full commit SHA with a version comment. Branch and tag refs are mutable and
 can change after review; a SHA cannot.
 
-Check names appear as `<caller job name> / <inner job name>` — with the names above:
+Check names appear as `<caller job name> / <inner job name>`; with the names above:
 `Build & Test / Build & Test`, `SAST / Semgrep`, `Policy / Gate`. Those exact strings
 are what a caller lists in branch protection as required status checks.
 
@@ -175,21 +177,21 @@ are what a caller lists in branch protection as required status checks.
 
 ## Outputs
 
-- `build-test.yml` → `build-result` — the result of the `build-and-test` job
+- `build-test.yml` → `build-result`: the result of the `build-and-test` job
   (`success`, `failure`, and so on).
-- `sast.yml` → `semgrep-result` — the result of the `semgrep` job.
+- `sast.yml` → `semgrep-result`: the result of the `semgrep` job.
 
 ## What callers must provide
 
-**Build & Test** — inside `working-directory`: a `package.json`, a `package-lock.json`
+**Build & Test**: inside `working-directory`, a `package.json`, a `package-lock.json`
 (the npm cache step fails without it), a `build` script, and the script named by
 `test-command`. That is the whole contract.
 
-**SAST + Policy Gate** — additionally:
+**SAST + Policy Gate**: additionally
 
-- `policy/semgrep-rules/` — the vendored rule bundle the scan reads (no network fetch
+- `policy/semgrep-rules/`: the vendored rule bundle the scan reads (no network fetch
   at scan time; see a caller repository for the provenance-file pattern).
-- `policy/*.rego` — the gate rules **and** their `*_test.rego` unit tests
+- `policy/*.rego`: the gate rules and their `*_test.rego` unit tests
   (`conftest verify` runs before evaluation and fails the gate if tests fail).
 - Job permissions: the `sast` job needs `security-events: write` (SARIF upload); the
   `policy` job needs `actions: read` (artifact download).
