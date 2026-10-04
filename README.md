@@ -43,7 +43,7 @@ flowchart TD
 jobs:
   build-and-test:
     name: Build & Test
-    uses: enofei/reusable-build-test/.github/workflows/build-test.yml@59e8e1fb94b462eae54949475096c923b930d592  # v1.0.0
+    uses: enofei/reusable-build-test/.github/workflows/build-test.yml@84333a75913b870266360fe802b5c7a56ca79564  # v1.0.0
     with:
       node-version: '24'
       test-command: 'npm run test:ci'
