@@ -3,25 +3,17 @@ name: Reusable SAST
 on:
   workflow_call:
     inputs:
-      languages:
-        description: 'CodeQL languages (comma-separated)'
-        required: false
-        default: 'php,javascript'
-        type: string
       semgrep-config:
         description: 'Semgrep rule configuration'
         required: false
         default: 'auto'
         type: string
-      codeql-queries:
-        description: 'CodeQL query suite'
+      paths:
+        description: 'Paths to scan (space-separated)'
         required: false
-        default: 'security-extended'
+        default: '.'
         type: string
     outputs:
-      codeql-result:
-        description: 'CodeQL job result'
-        value: ${{ jobs.codeql.result }}
       semgrep-result:
         description: 'Semgrep job result'
         value: ${{ jobs.semgrep.result }}
@@ -30,28 +22,6 @@ permissions:
   contents: read
 
 jobs:
-  codeql:
-    name: CodeQL
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-      security-events: write
-      actions: read
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2  # v4.38.2
-        with:
-          languages: ${{ inputs.languages }}
-          queries: ${{ inputs.codeql-queries }}
-
-      - name: Perform CodeQL analysis
-        uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2  # v4.38.2
-        with:
-          category: '/language:${{ inputs.languages }}'
-
   semgrep:
     name: Semgrep
     runs-on: ubuntu-24.04
@@ -66,7 +36,7 @@ jobs:
         run: python3 -m pip install --quiet semgrep==1.179.0
 
       - name: Run Semgrep scan
-        run: semgrep scan --config "${{ inputs.semgrep-config }}" --sarif --output semgrep.sarif .
+        run: semgrep scan --config "${{ inputs.semgrep-config }}" --sarif --output semgrep.sarif ${{ inputs.paths }}
 
       - name: Upload Semgrep SARIF
         uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2  # v4.38.2
