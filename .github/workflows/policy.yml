@@ -86,6 +86,8 @@ jobs:
               sys.exit(f"unexpected SARIF tool: {name!r}")
           if "results" not in run0:
               sys.exit("SARIF missing results key")
+          if not isinstance((driver.get("rules")), list):
+              sys.exit("SARIF missing tool.driver.rules (needed for severity)")
           print(f"SARIF OK: tool={name}, results={len(run0['results'])}")
           PY
 
