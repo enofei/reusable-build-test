@@ -216,7 +216,8 @@ administrators included, so GitHub itself refuses unsigned or unverified pushes 
 Routine work happens on `dev`; a signed commit from `dev` can be pushed to `main` directly,
 or merged through a pull request (GitHub signs its merge commits). Commits made on a machine
 with the signing configuration in place are signed automatically. Caller repositories layer
-their own required status checks on top (see `enofei/caller-repo` for the enforced setup).
+their own required status checks on top (see `enofei/caller-repo` for the enforced setup
+and its break-glass runbook).
 
 ## Releasing
 
