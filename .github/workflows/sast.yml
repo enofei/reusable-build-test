@@ -127,9 +127,19 @@ jobs:
           for name in ("gitleaks-dir.sarif", "gitleaks-git.sarif"):
               with open(name) as f:
                   docs.append(json.load(f))
+          # Code scanning rejects multiple runs with the same tool in one
+          # upload, so combine same-driver runs into a single run.
           merged = {"version": docs[0].get("version", "2.1.0"), "runs": []}
+          by_driver = {}
           for doc in docs:
-              merged["runs"].extend(doc.get("runs", []))
+              for run in doc.get("runs", []):
+                  drv = run.get("tool", {}).get("driver", {}).get("name")
+                  if drv in by_driver:
+                      by_driver[drv].setdefault("results", []).extend(
+                          run.get("results", []))
+                  else:
+                      by_driver[drv] = run
+                      merged["runs"].append(run)
           if not merged["runs"]:
               raise SystemExit("gitleaks SARIF merge produced no runs")
           with open("gitleaks.sarif", "w") as f:
