@@ -140,7 +140,7 @@ jobs:
           BASELINE="${{ inputs.baseline-file }}"
           if [ "$GATE_REF" = "main" ]; then
             echo '{"fingerprints": []}' > baseline.json
-            echo "::notice::main: no risk accepted — baseline bypassed; every finding counts"
+            echo "::notice::main: no risk accepted - baseline bypassed; every finding counts"
           elif [ -z "$BASELINE" ]; then
             echo '{"fingerprints": []}' > baseline.json
             echo "baseline disabled by input; using empty baseline"
