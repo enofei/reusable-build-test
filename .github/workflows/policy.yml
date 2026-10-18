@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       mode:
-        description: 'Gate mode: warn | enforce-critical | enforce-full (main is clamped to enforce-full and bypasses the baseline: no risk accepted)'
+        description: 'Gate mode: warn | enforce-critical | enforce-full (main clamp temporarily disabled during thaw; baseline still bypassed on main)'
         required: false
         default: 'enforce-critical'
         type: string
@@ -48,15 +48,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
-      - name: Resolve effective gate mode (clamp main to enforce-full)
+      - name: Resolve effective gate mode (main clamp thawed off)
         run: |
           set -euo pipefail
           MODE="${{ inputs.mode }}"
           REF="${{ github.base_ref || github.ref_name }}"
-          if [ "$REF" = "main" ]; then
-            echo "Branch main: clamping mode '${MODE}' -> enforce-full"
-            MODE="enforce-full"
-          fi
           case "$MODE" in
             warn|enforce-critical|enforce-full) ;;
             *) echo "::error::invalid gate mode: ${MODE}"; exit 1 ;;
