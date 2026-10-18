@@ -59,10 +59,10 @@ flowchart TD
     A["PR: ci.yml calls sast.yml and policy.yml (SHA-pinned)"] --> B["sast.yml: 3 digest-pinned scanners<br/>Semgrep + Gitleaks (dir+git) + Trivy fs"]
     A2["PR only: Dependency Review"] --> B2["fails on new vulnerable deps<br/>(own required check, no SARIF path)"]
     A3["every run: Actionlint"] --> B3["lints caller workflows (shellcheck +<br/>pyflakes integration; own required check)"]
-    B --> C["SARIF to code scanning + artifacts<br/>semgrep-sarif, gitleaks-sarif, trivy-sarif<br/>(if: always, any missing ⇒ red)"]
-    D["policy.yml: needs sast, if always"] --> E["Clamp mode: main → enforce-full"]
+    B --> C["SARIF to code scanning + artifacts<br/>semgrep-sarif, gitleaks-sarif, trivy-sarif<br/>(if: always, any missing => red)"]
+    D["policy.yml: needs sast, if always"] --> E["Clamp mode: main -> enforce-full"]
     E --> F["Download all SARIFs, merge runs[] (fail-closed)"]
-    F --> G["Load findings baseline (missing ⇒ red)"]
+    F --> G["Load findings baseline (missing => red)"]
     G --> H["Download conftest, verify SHA-256"]
     H --> I["conftest verify: run policy unit tests"]
     I --> J["conftest test: evaluate caller Rego"]
@@ -74,11 +74,11 @@ flowchart TD
 **Scan (`sast.yml`)**
 
 - **Semgrep** runs from a digest-pinned container (`semgrep/semgrep:1.179.0@sha256:…`);
-  no rule source is fetched from the network — the caller passes a vendored rule bundle
+  no rule source is fetched from the network - the caller passes a vendored rule bundle
   (`semgrep-config`, default `policy/semgrep-rules`). `--no-rewrite-rule-ids` keeps
   registry rule IDs intact so code-scanning alerts deduplicate across runs.
 - **Gitleaks** runs from a digest-pinned container (`ghcr.io/gitleaks/gitleaks:…@sha256:…`)
-  in two passes — the worktree (`dir`) and full git history (`git`, `fetch-depth: 0`) —
+  in two passes - the worktree (`dir`) and full git history (`git`, `fetch-depth: 0`) -
   whose SARIFs are merged into one artifact. Built-in rules apply unless
   `gitleaks-config` points at a config; a root `.gitleaksignore` suppresses
   documented false positives at the tool level.
@@ -96,7 +96,7 @@ flowchart TD
   embedded `run:` blocks (shell + python). One documented false positive is
   suppressed by exact message: `jobs.<id>.result` inside `workflow_call` outputs is
   valid GitHub syntax that actionlint's type model does not cover
-  (rhysd/actionlint#343) — a mistyped property anywhere else still fails. Like
+  (rhysd/actionlint#343) - a mistyped property anywhere else still fails. Like
   Dependency Review it has no SARIF path: the job's own status is the signal, so
   callers list `SAST / Actionlint` as a required check and keep workflows
   actionlint-clean (zero-findings policy; no baseline).
@@ -106,21 +106,21 @@ flowchart TD
 
 **Gate (`policy.yml`)**
 
-Every step fails closed (anomaly ⇒ red, never green):
+Every step fails closed (anomaly => red, never green):
 
 1. **Mode clamp**: when the ref is `main` (base or head), the effective mode is forced
    to `enforce-full` regardless of the caller's `mode` input; callers cannot relax the
    gate for merges. An unknown mode is a hard error.
 2. **Artifact download**: every name in `sarif-artifacts` (default
    `semgrep-sarif,gitleaks-sarif,trivy-sarif`) must download and contain a `.sarif`
-   file — a missing artifact fails the gate.
+   file - a missing artifact fails the gate.
 3. **SARIF merge + validation**: all runs are concatenated into one document; each run
    must have a tool name and `results[]`; `tool.driver.rules` is optional per run
    (severity resolution falls back when absent).
 4. **Baseline load**: `baseline-file` (default `policy/baseline.json`) must exist and
-   hold well-formed fingerprints — unless explicitly passed as empty to disable.
+   hold well-formed fingerprints - unless explicitly passed as empty to disable.
    When the gate runs on `main` (PR base or push ref), the baseline is **bypassed
-   entirely**: empty fingerprints, every finding counts — no risk is accepted on
+   entirely**: empty fingerprints, every finding counts - no risk is accepted on
    `main`, so any vulnerability turns the gate red there.
 5. **Trusted toolchain**: conftest is installed to `$RUNNER_TEMP` and checked against
    the embedded `conftest-sha256` before execution.
@@ -138,7 +138,7 @@ Every step fails closed (anomaly ⇒ red, never green):
 
 Modes are for testing on non-main branches; `main` is always clamped to
 `enforce-full`. The caller's Rego decides which findings are suppressed (e.g. a
-checked-in baseline of known vendored findings) — there are no path exemptions in
+checked-in baseline of known vendored findings) - there are no path exemptions in
 these workflows.
 
 The gate job must be wired with `if: ${{ always() }}` and `needs: [sast]` (as in the
@@ -223,9 +223,9 @@ alongside the rest).
 
 ## Outputs
 
-- `build-test.yml` → `build-result`: the result of the `build-and-test` job
+- `build-test.yml` -> `build-result`: the result of the `build-and-test` job
   (`success`, `failure`, and so on).
-- `sast.yml` → `semgrep-result`, `gitleaks-result`, `trivy-result`,
+- `sast.yml` -> `semgrep-result`, `gitleaks-result`, `trivy-result`,
   `dep-review-result`: the results of each scanner job.
 
 ## What callers must provide
@@ -244,7 +244,7 @@ alongside the rest).
 - `policy/*.rego`: the gate rules and their `*_test.rego` unit tests
   (`conftest verify` runs before evaluation and fails the gate if tests fail).
 - `policy/baseline.json`: findings baseline with a `fingerprints[]` array of
-  `{sha256, tool, ruleId, path, message}` objects — known findings that are
+  `{sha256, tool, ruleId, path, message}` objects - known findings that are
   suppressed in every mode **off `main`**; on `main` the workflow bypasses the
   baseline entirely (empty fingerprints), so every finding is evaluated and any
   vulnerability fails the gate. Anything not in the baseline is evaluated
@@ -256,14 +256,14 @@ alongside the rest).
   the known `jobs.<id>.result` false positive is suppressed inside the job itself).
 
 Baselines, severity thresholds, and any finding suppression belong in the caller's
-Rego and baseline file, not in these workflows — these workflows enforce uniformly
+Rego and baseline file, not in these workflows - these workflows enforce uniformly
 and carry no path exemptions.
 
 ## Operating the baseline (caller runbook)
 
 Baseline fingerprints only govern refs **off `main`** (dev PRs, smoke runs,
 pre-merge ratchet). On `main` the baseline is bypassed by the workflow, so this
-runbook applies to keeping dev/pre-merge green — it cannot make `main` green
+runbook applies to keeping dev/pre-merge green - it cannot make `main` green
 while accepted-risk content lives in the tree.
 
 The gate is intentionally fail-closed, so three kinds of drift will turn it red
@@ -279,7 +279,7 @@ gh run download <run-id> --pattern '*-sarif'   # semgrep-sarif, gitleaks-sarif, 
 
 Local parity traps: Gitleaks must be invoked with the same subcommands CI uses
 (`gitleaks dir .` / `gitleaks git .`, not `detect`), and Trivy's vulnerability
-DB is fetched fresh on every run — a local cache can be days behind CI and
+DB is fetched fresh on every run - a local cache can be days behind CI and
 miss CVEs that CI will flag.
 
 **2. Vulnerability-DB drift.** Trivy downloads the latest DB at scan time
@@ -291,10 +291,10 @@ contract, not a bug.
 **3. Vendored rule-bundle reflows shift line numbers.** `.gitleaksignore`
 fingerprints are line-sensitive:
 
-- worktree pass: `path:rule:line` — refresh when the vendored file is
+- worktree pass: `path:rule:line` - refresh when the vendored file is
   re-fetched and content shifts (the gate tells you the new line in its
   deny message);
-- history pass: `commit:path:rule:line` — the line is as-it-was in that
+- history pass: `commit:path:rule:line` - the line is as-it-was in that
   commit's blob, so old entries stay valid; new commits touching the file
   may add new worktree fingerprints only.
 
@@ -302,7 +302,7 @@ Gitleaks dedupes history findings to the earliest commit that contains them,
 so one history entry per false positive usually suffices.
 
 Baseline hygiene: fingerprint only vendored/test content. A first-party
-finding in the baseline is a reviewable, signed diff — treat every added
+finding in the baseline is a reviewable, signed diff - treat every added
 fingerprint as a finding that stops blocking.
 
 ## Resolving a release tag to a pin
@@ -341,5 +341,5 @@ request in a caller repository (see `enofei/caller-repo`), which exercises the w
 against real code before a release tag is cut. Caller-side policy changes can be tested
 locally with `conftest verify --policy policy/` and `conftest test --policy policy/ --parser json <input>`.
 When a CI gate run disagrees with your local simulation, replay it against the run's
-downloaded SARIF artifacts (`gh run download --pattern '*-sarif'`) — see
+downloaded SARIF artifacts (`gh run download --pattern '*-sarif'`) - see
 "Operating the baseline" above.

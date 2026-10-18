@@ -246,13 +246,12 @@ jobs:
       - name: Lint workflow files
         run: |
           set -euo pipefail
-          # Integrates the runner's preinstalled shellcheck and pyflakes for
-          # embedded run:-block analysis (do not start comments with
-          # "shellcheck" — the tool parses those as directives).
-          # -ignore: `jobs.<id>.result` inside workflow_call outputs is valid,
-          # documented GitHub syntax that actionlint's type model does not
-          # cover (rhysd/actionlint#343). Scoped to that exact message so a
-          # mistyped property anywhere else still fails the job.
+          # Lints this run: blocks with the runner's shellcheck + pyflakes.
+          # Never start a comment with the word shellcheck (actionlint feeds
+          # blocks to shellcheck, which parses that as a directive).
+          # -ignore: workflow_call output property jobs.<id>.result is valid
+          # GitHub syntax actionlint's type model does not cover
+          # (rhysd/actionlint#343), exact-message scoped so a typo still fails.
           "$RUNNER_TEMP/actionlint" \
             -shellcheck shellcheck \
             -pyflakes pyflakes \
