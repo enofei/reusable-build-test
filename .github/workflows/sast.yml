@@ -219,3 +219,42 @@ jobs:
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294  # v5.0.0
         with:
           fail-on-severity: ${{ inputs.dep-review-fail-on }}
+
+  actionlint:
+    name: Actionlint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Install actionlint (pinned, checksum-verified)
+        env:
+          ACTIONLINT_VERSION: '1.7.12'
+          ACTIONLINT_SHA256: '8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8'
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          curl -fsSL -o actionlint.tar.gz \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          echo "${ACTIONLINT_SHA256}  actionlint.tar.gz" | sha256sum -c -
+          tar xzf actionlint.tar.gz actionlint
+          ./actionlint --version
+
+      - name: Lint workflow files
+        run: |
+          set -euo pipefail
+          # Integrates the runner's preinstalled shellcheck and pyflakes for
+          # embedded run:-block analysis (do not start comments with
+          # "shellcheck" — the tool parses those as directives).
+          # -ignore: `jobs.<id>.result` inside workflow_call outputs is valid,
+          # documented GitHub syntax that actionlint's type model does not
+          # cover (rhysd/actionlint#343). Scoped to that exact message so a
+          # mistyped property anywhere else still fails the job.
+          "$RUNNER_TEMP/actionlint" \
+            -shellcheck shellcheck \
+            -pyflakes pyflakes \
+            -ignore 'property "result" is not defined' \
+            .github/workflows/*.yml
