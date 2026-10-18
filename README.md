@@ -18,7 +18,7 @@ release tag's commit SHA.
 | Workflow | File | What it provides |
 |---|---|---|
 | Build & Test | `build-test.yml` | `npm ci`, build, test, `npm audit` |
-| SAST | `sast.yml` | digest-pinned Semgrep + Gitleaks + Trivy scans and a PR-time Dependency Review; SARIF to code scanning + artifacts |
+| SAST | `sast.yml` | digest-pinned Semgrep + Gitleaks + Trivy scans, a PR-time Dependency Review, and Actionlint over the caller's workflows; SARIF to code scanning + artifacts |
 | Policy Gate | `policy.yml` | fail-closed OPA/conftest gate over all scan results, checked against a findings baseline |
 
 The security pair (`sast.yml` + `policy.yml`) is designed to be called together: the scan
@@ -58,6 +58,7 @@ flowchart TD
 flowchart TD
     A["PR: ci.yml calls sast.yml and policy.yml (SHA-pinned)"] --> B["sast.yml: 3 digest-pinned scanners<br/>Semgrep + Gitleaks (dir+git) + Trivy fs"]
     A2["PR only: Dependency Review"] --> B2["fails on new vulnerable deps<br/>(own required check, no SARIF path)"]
+    A3["every run: Actionlint"] --> B3["lints caller workflows (shellcheck +<br/>pyflakes integration; own required check)"]
     B --> C["SARIF to code scanning + artifacts<br/>semgrep-sarif, gitleaks-sarif, trivy-sarif<br/>(if: always, any missing ⇒ red)"]
     D["policy.yml: needs sast, if always"] --> E["Clamp mode: main → enforce-full"]
     E --> F["Download all SARIFs, merge runs[] (fail-closed)"]
@@ -89,6 +90,16 @@ flowchart TD
 - **Dependency Review** (PR events only) fails the job when a PR introduces a
   dependency advisory at or above `dep-review-fail-on` (default `low`). It produces no
   SARIF, so callers list it as its own required status check.
+- **Actionlint** lints `.github/workflows/*.yml` in the caller's checkout with a
+  pinned, checksum-verified binary (`rhysd/actionlint` release tarball; version and
+  sha256 live in the job). The runner's preinstalled shellcheck and pyflakes analyze
+  embedded `run:` blocks (shell + python). One documented false positive is
+  suppressed by exact message: `jobs.<id>.result` inside `workflow_call` outputs is
+  valid GitHub syntax that actionlint's type model does not cover
+  (rhysd/actionlint#343) — a mistyped property anywhere else still fails. Like
+  Dependency Review it has no SARIF path: the job's own status is the signal, so
+  callers list `SAST / Actionlint` as a required check and keep workflows
+  actionlint-clean (zero-findings policy; no baseline).
 - Every scanner runs report-only at tool level (`--exit-code 0`); blocking is the
   gate's job. Each SARIF uploads to code scanning (distinct `category`) and archives
   as an artifact (1-day retention, `if-no-files-found: error`).
@@ -170,9 +181,10 @@ can change after review; a SHA cannot.
 
 Check names appear as `<caller job name> / <inner job name>`; with the names above:
 `Build & Test / Build & Test`, `SAST / Semgrep`, `SAST / Gitleaks`, `SAST / Trivy`,
-`SAST / Dependency Review`, `Policy / Gate`. Those exact strings are what a caller
-lists in branch protection as required status checks (`SAST / Dependency Review` only
-reports on pull requests, so it should be required alongside the rest).
+`SAST / Dependency Review`, `SAST / Actionlint`, `Policy / Gate`. Those exact strings
+are what a caller lists in branch protection as required status checks
+(`SAST / Dependency Review` only reports on pull requests, so it should be required
+alongside the rest).
 
 ## Inputs
 
@@ -235,6 +247,8 @@ reports on pull requests, so it should be required alongside the rest).
 - Job permissions: the `sast` job needs `security-events: write` (SARIF upload); the
   `policy` job needs `actions: read` (artifact download).
 - The gate job wired as `if: ${{ always() }}` with `needs: [sast]`.
+- Workflows under `.github/workflows/` must pass Actionlint (zero-findings policy;
+  the known `jobs.<id>.result` false positive is suppressed inside the job itself).
 
 Baselines, severity thresholds, and any finding suppression belong in the caller's
 Rego and baseline file, not in these workflows — these workflows enforce uniformly
