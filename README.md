@@ -240,6 +240,47 @@ Baselines, severity thresholds, and any finding suppression belong in the caller
 Rego and baseline file, not in these workflows — these workflows enforce uniformly
 and carry no path exemptions.
 
+## Operating the baseline (caller runbook)
+
+The gate is intentionally fail-closed, so three kinds of drift will turn it red
+after changes that look unrelated. All three are working as designed.
+
+**1. Rebuild the baseline from CI artifacts, not local rescans.** When the gate
+fails on findings your local simulation missed, download the exact inputs the
+gate consumed and regenerate from those:
+
+```bash
+gh run download <run-id> --pattern '*-sarif'   # semgrep-sarif, gitleaks-sarif, trivy-sarif
+```
+
+Local parity traps: Gitleaks must be invoked with the same subcommands CI uses
+(`gitleaks dir .` / `gitleaks git .`, not `detect`), and Trivy's vulnerability
+DB is fetched fresh on every run — a local cache can be days behind CI and
+miss CVEs that CI will flag.
+
+**2. Vulnerability-DB drift.** Trivy downloads the latest DB at scan time
+(signature-verified). New CVEs against vendored/lockfile dependencies appear
+as new findings overnight; under `enforce-full` they block until fingerprinted
+into the baseline (or the dependency is fixed). This is the fail-closed
+contract, not a bug.
+
+**3. Vendored rule-bundle reflows shift line numbers.** `.gitleaksignore`
+fingerprints are line-sensitive:
+
+- worktree pass: `path:rule:line` — refresh when the vendored file is
+  re-fetched and content shifts (the gate tells you the new line in its
+  deny message);
+- history pass: `commit:path:rule:line` — the line is as-it-was in that
+  commit's blob, so old entries stay valid; new commits touching the file
+  may add new worktree fingerprints only.
+
+Gitleaks dedupes history findings to the earliest commit that contains them,
+so one history entry per false positive usually suffices.
+
+Baseline hygiene: fingerprint only vendored/test content. A first-party
+finding in the baseline is a reviewable, signed diff — treat every added
+fingerprint as a finding that stops blocking.
+
 ## Resolving a release tag to a pin
 
 ```bash
@@ -275,3 +316,6 @@ There is no local runner for a `workflow_call` job. Changes are tested by openin
 request in a caller repository (see `enofei/caller-repo`), which exercises the workflows
 against real code before a release tag is cut. Caller-side policy changes can be tested
 locally with `conftest verify --policy policy/` and `conftest test --policy policy/ --parser json <input>`.
+When a CI gate run disagrees with your local simulation, replay it against the run's
+downloaded SARIF artifacts (`gh run download --pattern '*-sarif'`) — see
+"Operating the baseline" above.
