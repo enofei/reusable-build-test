@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       mode:
-        description: 'Gate mode: warn | enforce-critical | enforce-full (main is clamped to enforce-full)'
+        description: 'Gate mode: warn | enforce-critical | enforce-full (main is clamped to enforce-full and bypasses the baseline: no risk accepted)'
         required: false
         default: 'enforce-critical'
         type: string
@@ -62,6 +62,7 @@ jobs:
             *) echo "::error::invalid gate mode: ${MODE}"; exit 1 ;;
           esac
           echo "GATE_MODE=$MODE" >> "$GITHUB_ENV"
+          echo "GATE_REF=$REF" >> "$GITHUB_ENV"
           echo "Effective gate mode: $MODE (ref: $REF, input: '${{ inputs.mode }}')"
 
       - name: Download SARIF artifacts (all required, fail-closed)
@@ -134,8 +135,13 @@ jobs:
       - name: Load findings baseline (fail-closed)
         run: |
           set -euo pipefail
+          [ -n "${GATE_REF:-}" ] \
+            || { echo "::error::GATE_REF not set (clamp step must run first)"; exit 1; }
           BASELINE="${{ inputs.baseline-file }}"
-          if [ -z "$BASELINE" ]; then
+          if [ "$GATE_REF" = "main" ]; then
+            echo '{"fingerprints": []}' > baseline.json
+            echo "::notice::main: no risk accepted — baseline bypassed; every finding counts"
+          elif [ -z "$BASELINE" ]; then
             echo '{"fingerprints": []}' > baseline.json
             echo "baseline disabled by input; using empty baseline"
           else
