@@ -119,6 +119,9 @@ Every step fails closed (anomaly ⇒ red, never green):
    (severity resolution falls back when absent).
 4. **Baseline load**: `baseline-file` (default `policy/baseline.json`) must exist and
    hold well-formed fingerprints — unless explicitly passed as empty to disable.
+   When the gate runs on `main` (PR base or push ref), the baseline is **bypassed
+   entirely**: empty fingerprints, every finding counts — no risk is accepted on
+   `main`, so any vulnerability turns the gate red there.
 5. **Trusted toolchain**: conftest is installed to `$RUNNER_TEMP` and checked against
    the embedded `conftest-sha256` before execution.
 6. **Policy unit tests first**: `conftest verify` must pass before the gate evaluates.
@@ -214,7 +217,7 @@ alongside the rest).
 | `mode` | string | `'enforce-critical'` | `warn` \| `enforce-critical` \| `enforce-full`; `main` is clamped to `enforce-full` |
 | `policy-path` | string | `'policy/'` | Directory containing the caller's Rego policies and tests |
 | `sarif-artifacts` | string | `'semgrep-sarif,gitleaks-sarif,trivy-sarif'` | Comma-separated artifact names; every one is required |
-| `baseline-file` | string | `'policy/baseline.json'` | Findings baseline; empty string uses an empty baseline (nothing suppressed) |
+| `baseline-file` | string | `'policy/baseline.json'` | Findings baseline; empty string uses an empty baseline (nothing suppressed); always bypassed (empty) when the gate runs on `main` |
 | `conftest-version` | string | `'0.71.0'` | conftest release version (must match `conftest-sha256`) |
 | `conftest-sha256` | string | embedded | Trusted SHA-256 of the conftest Linux x86_64 tarball |
 
@@ -242,8 +245,10 @@ alongside the rest).
   (`conftest verify` runs before evaluation and fails the gate if tests fail).
 - `policy/baseline.json`: findings baseline with a `fingerprints[]` array of
   `{sha256, tool, ruleId, path, message}` objects — known findings that are
-  suppressed in every mode; anything not in the baseline is evaluated normally.
-  Missing or malformed fails the gate.
+  suppressed in every mode **off `main`**; on `main` the workflow bypasses the
+  baseline entirely (empty fingerprints), so every finding is evaluated and any
+  vulnerability fails the gate. Anything not in the baseline is evaluated
+  normally everywhere. Missing or malformed fails the gate.
 - Job permissions: the `sast` job needs `security-events: write` (SARIF upload); the
   `policy` job needs `actions: read` (artifact download).
 - The gate job wired as `if: ${{ always() }}` with `needs: [sast]`.
@@ -255,6 +260,11 @@ Rego and baseline file, not in these workflows — these workflows enforce unifo
 and carry no path exemptions.
 
 ## Operating the baseline (caller runbook)
+
+Baseline fingerprints only govern refs **off `main`** (dev PRs, smoke runs,
+pre-merge ratchet). On `main` the baseline is bypassed by the workflow, so this
+runbook applies to keeping dev/pre-merge green — it cannot make `main` green
+while accepted-risk content lives in the tree.
 
 The gate is intentionally fail-closed, so three kinds of drift will turn it red
 after changes that look unrelated. All three are working as designed.
